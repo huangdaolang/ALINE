@@ -1,6 +1,6 @@
 # ALINE: Joint Amortization for Bayesian Inference and Active Data Acquisition
 
-**[arXiv Link]**
+**[https://arxiv.org/abs/2506.07259]**
 
 ---
 
