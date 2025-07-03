@@ -1,0 +1,30 @@
+_target_: tasks.gaussian_process.GPTask
+
+name: GP_mix
+
+dim_x: 2
+dim_y: 1
+
+# Target mask parameters
+embedding_type: mix
+mask_type: ["split"]  # ["all", "split"] for full joint training
+n_selected_targets: null  # for partial mode
+predefined_masks: null
+predefined_mask_weights: null
+mask_index: null  # for predefined masks
+attend_to: null  # for split mode, we want to only attend to data or theta
+
+n_context_init: 1
+n_query_init: 200
+
+n_target_data: 100
+n_target_theta: 3  # must be dim_x + 1 (lengthscales, variances)
+
+design_scale: 5
+noise_scale: 0.01
+
+lengthscale_lower: 0.1
+lengthscale_upper: 2.0
+
+
+

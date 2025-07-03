@@ -1,0 +1,8 @@
+_target_: model.embedder.Embedder
+
+dim_x: ${task.dim_x}
+dim_y: ${task.dim_y}
+dim_embedding: ${encoder.dim_embedding}
+dim_feedforward: ${encoder.dim_feedforward}
+n_target_theta: ${task.n_target_theta}  # used to create theta embedding
+embedding_type: ${task.embedding_type}

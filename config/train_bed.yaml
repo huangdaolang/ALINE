@@ -1,0 +1,68 @@
+defaults:
+  - _self_
+  - encoder: encoder
+  - embedder: embedder
+  - head: head
+  - task: location_finding
+
+seed: 123
+
+max_epoch: 100000
+burning_epoch: 10000
+batch_size: 200
+
+T: 30
+time_token: False
+
+# Optimizer
+optimizer: AdamW
+lr: 1e-3
+
+# Scheduler
+scheduler: CosineAnnealing
+scheduler_args: {T_0: 1000, T_mult: 2}
+
+# Loss
+gamma: 1
+alpha: 1
+beta: 1
+
+# Training
+fix_seed: True
+clip_grads: True
+design_type: random
+verbose: 500
+device: cuda
+checkpoint: 100   # 0 if no checkpoint
+load_checkpoint: False
+load_path: null
+checkpoint_name: ckpt.tar
+
+# Evaluation
+L: 50000
+M: 2000
+eval_batch_size: 500
+# final eval
+L_final: 10000000
+M_final: 2000
+eval_batch_size_final: 5
+n_query_final: 2000
+T_final: 40
+
+run_id: 1
+
+# Output
+output_dir: ./outputs
+file_name: aae_${task.name}_d${task.dim_x}_${run_id}.pth
+
+
+##### W&B config #####
+wandb:
+  group: ${task.name}
+  project: "aline"
+  use_wandb: False
+  run_name: ${task.name}-${task.dim_x}D-${now:%Y-%m-%d_%H-%M}
+
+hydra:
+  run:
+    dir: outputs/hydra/${now:%Y-%m-%d}/${now:%H-%M-%S}

@@ -1,0 +1,11 @@
+python
+torch
+termcolor
+wandb
+hydra-core
+pandas
+attrdictionary
+matplotlib
+ipykernel
+scikit-learn
+scipy

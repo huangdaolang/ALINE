@@ -1,0 +1,55 @@
+defaults:
+  - _self_
+  - encoder: encoder
+  - embedder: embedder
+  - head: head
+  - task: gpr_mix
+
+seed: 123
+
+max_epoch: 100000
+burning_epoch: 10000
+batch_size: 200
+
+min_T: 30
+T: 30
+time_token: False
+
+# Optimizer
+optimizer: AdamW
+lr: 1e-3
+
+# Scheduler
+scheduler: CosineAnnealing #WarmRestarts
+scheduler_args: {T_0: 1000, T_mult: 2}
+
+# Loss
+loss: NMLELoss
+gamma: 0.99
+alpha: 1  # mixing factor of design loss 
+
+# Training
+fix_seed: True
+clip_grads: True
+design_type: random
+verbose: 500
+device: cuda
+checkpoint: 100   # 0 if no checkpoint
+load_checkpoint: False
+checkpoint_name: ckpt.tar
+
+# Output
+output_dir: ./outputs
+file_name: aae_${task.name}.pth
+
+
+##### W&B config #####
+wandb:
+  group: ${task.name}
+  project: "aline"
+  use_wandb: False
+  run_name: ${task.name}-${task.dim_x}D-${now:%Y-%m-%d_%H-%M}
+
+hydra:
+  run:
+    dir: outputs/hydra/${task.name}/${now:%Y-%m-%d}/${now:%H-%M-%S}

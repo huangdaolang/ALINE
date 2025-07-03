@@ -1,0 +1,31 @@
+_target_: tasks.psychometric.PsychometricTask
+
+name: Psychometric
+
+dim_x: 1
+dim_y: 1
+
+embedding_type: theta
+mask_type: ["predefined"]
+n_selected_targets: null  # for partial mode
+
+predefined_masks: [[False, False, True, True], [True, True, False, False]]
+predefined_mask_weights: [1, 1]
+mask_index: null  # for predefined masks
+
+attend_to: null  # for split mode, we want to only attend to data or theta
+
+n_context_init: 1
+n_query_init: 200
+
+n_target_data: 0
+n_target_theta: 4
+
+
+design_scale: 5
+
+
+
+
+
+

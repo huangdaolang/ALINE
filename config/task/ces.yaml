@@ -1,0 +1,31 @@
+_target_: tasks.ces.CESTask
+
+name: CES
+
+dim_x: 6
+dim_y: 1
+
+embedding_type: theta
+mask_type: ["all"]
+n_selected_targets: null  # for partial mode
+
+predefined_masks:  null
+predefined_mask_weights: null
+mask_index: null  # for predefined masks
+
+attend_to: null  # for split mode, we want to only attend to data or theta
+
+n_context_init: 1
+n_query_init: 200
+
+n_target_data: 0
+n_target_theta: 5
+
+
+design_scale: 1
+
+
+
+
+
+
