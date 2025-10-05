@@ -215,7 +215,7 @@ def main(cfg):
     bounds = eval_boed(model, experiment, cfg.T_final - cfg.task.n_context_init, cfg.L_final, cfg.M_final, cfg.eval_batch_size_final, cfg.time_token, stepwise=True)
 
     logger.info(bounds)
-    logger.info(f"PCE: {bounds['pce_mean'][cfg.T-1]:.3f}+-{bounds['pce_se'][cfg.T-1]:.3f}\tNMC: {bounds['nmc_mean'][cfg.T-1]:.3f}+-{bounds['nmc_se'][cfg.T-1]:.3f}")
+    logger.info(f"PCE: {bounds['pce_mean'][cfg.T-1]:.3f}+-{bounds['pce_std'][cfg.T-1]:.3f}\tNMC: {bounds['nmc_mean'][cfg.T-1]:.3f}+-{bounds['nmc_std'][cfg.T-1]:.3f}")
 
     # save bounds to file
     save_path = os.path.join(cfg.output_dir, "eval", f"{cfg.file_name.split('.')[0]}_N{cfg.n_query_final}_T{cfg.T_final}.tar")
