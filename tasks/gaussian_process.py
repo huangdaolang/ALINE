@@ -1,17 +1,34 @@
 import torch
 import numpy as np
-import torch.nn as nn
 import torch.distributions as dist
 from attrdictionary import AttrDict
 from tasks.base_task import Task
 
 
 class GPTask(Task):
-    """Gaussian Process Task for amortized inference with support for isotropic/anisotropic kernels"""
+    """
+    Gaussian process data generation for active learning with support for isotropic/anisotropic kernels
+
+    Args:
+        name (str): Name of the task
+        dim_x (int): Dimension of input
+        dim_y (int): Dimension of output
+        embedding_type (str): Mode of the experiment: "data", "theta", or "mix"
+        n_context_init (int): Number of initial context points
+        n_query_init (int): Number of initial query points
+        n_target_theta (int): Number of parameters: [lengthscale, variance]
+        n_target_data (int): Number of target points (for data and mix modes)
+        design_scale: Scale of the design space
+        noise_scale: Noise scale
+        p_iso: Probability of isotropic kernel
+        kernel_weights: Weights for different kernel types
+        lengthscale_lower: Lower bound for lengthscale
+        lengthscale_upper: Upper bound for lengthscale
+    """
 
     def __init__(
             self,
-            name: str = "GP",
+            name: str = "AL_mix",
             dim_x: int = 1,  # dimension of input
             dim_y: int = 1,  # dimension of output
             embedding_type="mix",  # mode of the experiment: "data", "theta", or "mix"
@@ -19,16 +36,17 @@ class GPTask(Task):
             n_query_init: int = 10,  # number of initial query points
             n_target_theta: int = 2,  # number of parameters: [lengthscale, variance]
             n_target_data: int = 5,  # number of target points (for data and mix modes)
-            design_scale=None,  # scale of the design space
+            design_scale = None,  # scale of the design space
             noise_scale: float = 0.01,  # noise scale
             p_iso: float = 0.5,  # probability of isotropic kernel
-            kernel_weights=None,
-            lengthscale_lower=0.1,
-            lengthscale_upper=2.0,
+            kernel_weights = None,
+            lengthscale_lower: float = 0.1,
+            lengthscale_upper: float = 2.0,
             **kwargs
     ) -> None:
         super().__init__(dim_x=dim_x, dim_y=dim_y)
 
+        self.name = name
         self.dim_x = dim_x
         self.dim_y = dim_y
         self.n_context_init = n_context_init
@@ -39,7 +57,6 @@ class GPTask(Task):
         self.embedding_type = embedding_type
         self.jitter = 1e-5
         self.p_iso = p_iso  # probability of isotropic kernel
-        # self.kernel_weights = kernel_weights if kernel_weights is not None else [0.25, 0.25, 0.25, 0.25]
         self.kernel_weights = kernel_weights if kernel_weights is not None else [1/3, 0, 1/3, 1/3]
         self.kernel_types = ["rbf", "matern12", "matern32", "matern52"]
 
@@ -67,43 +84,113 @@ class GPTask(Task):
     def sample_theta(self, batch_size):
         """Sample hyperparameters from the prior, supporting both isotropic and anisotropic kernels"""
         # Sample per-dimension lengthscales
-        ls_range = self.lengthscale_upper - self.lengthscale_lower
-        length_scales = self.lengthscale_lower + ls_range * torch.rand(batch_size, self.dim_x)
+        lengthscale_range = self.lengthscale_upper - self.lengthscale_lower
+        length_scales = self.lengthscale_lower + lengthscale_range * torch.rand(batch_size, self.dim_x)
 
         # Determine if each batch uses isotropic kernel (same lengthscale for all dimensions)
         is_iso = torch.bernoulli(torch.ones(batch_size) * self.p_iso).bool()
 
-        new_length_scales = length_scales.clone()
-        for b in range(batch_size):
-            if is_iso[b]:
-                new_length_scales[b, :] = length_scales[b, 0]
-        length_scales = new_length_scales
+        # If isotropic, set all lengthscales to be the same as the first dimension's lengthscale
+        length_scales[is_iso] = length_scales[is_iso, 0].unsqueeze(1)
 
-        # Sample variance
-        scale = self.scale_lower + (self.scale_upper - self.scale_lower) * torch.rand(batch_size)
+        # Sample output scale
+        output_scale = self.scale_lower + (self.scale_upper - self.scale_lower) * torch.rand(batch_size)
 
         # Stack all parameters: [lengthscales, variance]
         theta = torch.cat([
             length_scales,  # [B, D]
-            scale.unsqueeze(1),  # [B, 1]
+            output_scale.unsqueeze(1),  # [B, 1]
         ], dim=1)
 
-        return theta.unsqueeze(2)  # [B, D+2, 1]
+        return theta.unsqueeze(2)  # [B, D+1, 1]
 
     @torch.no_grad()
     def sample_data(self, batch_size, n_data):
-        """Sample input points from the domain"""
+        """
+        Sample input points from the domain
+
+        Args:
+            batch_size (int): Number of batches to generate
+            n_data (int): Number of data points to generate per batch
+
+        Returns:
+            Input points [batch_size, n_data, dim_x]
+        """
         # Simple uniform random sampling in the design space
         return torch.rand(batch_size, n_data, self.dim_x) * 2 * self.design_scale - self.design_scale
+    
+
+    @torch.no_grad()
+    def sample_data_sobol(self, batch_size, n_data, scramble=True):
+        """
+        Generate points using the Sobol sequence within the design space.
+
+        Args:
+            batch_size (int): Number of batches to generate.
+            n_data (int): Number of data points per batch.
+            scramble (bool, optional): Whether to scramble the sequence.
+
+        Returns:
+            Tensor: Generated points in the design space, shape [batch_size, n_data, dim_x].
+        """
+        device = self.design_scale.device
+
+        # Define lower and upper bounds for the design space
+        lb = -self.design_scale * torch.ones(self.dim_x, device=device)
+        ub = self.design_scale * torch.ones(self.dim_x, device=device)
+
+        # Initialize result tensor
+        points = torch.zeros(batch_size, n_data, self.dim_x, device=device)
+
+        # Generate points for each batch
+        for b in range(batch_size):
+            # Create a Sobol engine for this batch
+            soboleng = torch.quasirandom.SobolEngine(dimension=self.dim_x, scramble=scramble)
+
+            # Draw points and scale to the design space
+            batch_points = soboleng.draw(n_data)
+            # Move batch_points to the correct device before operations
+            batch_points = batch_points.to(device)
+            batch_points = batch_points * (ub - lb) + lb
+
+            # Store in result tensor
+            points[b] = batch_points
+
+            # Optional: Apply random permutation to introduce randomness while preserving uniformity
+            if scramble:
+                for d in range(self.dim_x):
+                    perm_idx = torch.randperm(n_data, device=device)
+                    points[b, :, d] = points[b, perm_idx, d]
+
+        return points
 
     def to_design_space(self, xi):
-        """Convert normalized design to actual input domain"""
+        """
+        Convert normalized design to actual input domain
+
+        Args:
+            xi (torch.Tensor): Normalized design points [batch_size, n_data, dim_x]
+
+        Returns:
+            Design points [batch_size, n_data, dim_x]
+        """
         return xi * self.design_scale
 
     def normalise_outcomes(self, y):
-        """Normalize outcomes if needed"""
-        return y
+        """
+        Normalize outcomes if needed
 
+        Args:
+            y (torch.Tensor): Outcomes [batch_size, n_data, dim_y]
+
+        Returns:
+            Normalized outcomes [batch_size, n_data, dim_y]
+        """
+
+        return y
+    
+
+    @torch.no_grad()
     def rbf_kernel(self, x1, x2, lengthscales, scale):
         """
         Compute RBF kernel between x1 and x2 with support for both isotropic and anisotropic kernels
@@ -134,6 +221,7 @@ class GPTask(Task):
 
         return kernel  # [N, M]
 
+    @torch.no_grad()
     def matern12_kernel(self, x1, x2, lengthscales, scale):
         """
         Compute Matérn 1/2 kernel (exponential kernel) between x1 and x2
@@ -164,6 +252,7 @@ class GPTask(Task):
 
         return kernel  # [N, M]
 
+    @torch.no_grad()
     def matern32_kernel(self, x1, x2, lengthscales, scale):
         """
         Compute Matérn 3/2 kernel between x1 and x2
@@ -195,6 +284,7 @@ class GPTask(Task):
 
         return kernel  # [N, M]
 
+    @torch.no_grad()
     def matern52_kernel(self, x1, x2, lengthscales, scale):
         """
         Compute Matérn 5/2 kernel between x1 and x2
@@ -279,7 +369,7 @@ class GPTask(Task):
 
         Args:
             x: input locations [B, N, dim_x]
-            theta: GP hyperparameters [B, dim_x+2, 1]
+            theta: GP hyperparameters [B, dim_x+1, 1]
 
         Returns:
             GP function values with noise [B, N, 1]
@@ -358,7 +448,15 @@ class GPTask(Task):
             return self.generate_gp_data(x, theta)
 
     def sample_batch(self, batch_size):
-        """Sample a batch of data based on the mode"""
+        """
+        Sample a batch of data based on the mode
+
+        Args:
+            batch_size (int): Number of batches to generate
+
+        Returns:
+            Batch of data [batch_size, n_context_init, n_query_init, n_target_data]
+        """
         # Initialize the dictionary to return
         batch = AttrDict()
 
@@ -382,6 +480,8 @@ class GPTask(Task):
 
             # For theta mode, target is the hyperparameters
             batch.target_all = batch.target_theta = theta
+            batch.target_x = None
+            batch.target_y = None
 
         elif self.embedding_type == "data":
             # Context, query, and target points
@@ -422,7 +522,6 @@ class GPTask(Task):
             # For mix mode, both data and theta are targets
             batch.target_theta = theta
 
-
             # Combine target data and theta for target_all
             batch.target_all = torch.cat([batch.target_y, batch.target_theta], dim=1)
 
@@ -440,19 +539,20 @@ class GPTask(Task):
 
         for key in del_keys:
             del info[key]
-        return f"GPTask({', '.join('{}={}'.format(key, val) for key, val in info.items())})"
+        return f"Active learning task with GP prior data({', '.join('{}={}'.format(key, val) for key, val in info.items())})"
 
 
 
 if __name__ == "__main__":
     # Import visualization libraries
     import matplotlib.pyplot as plt
-    import matplotlib
     import argparse
+    from utils.plot_config import apply_style
+    apply_style(use_tex=False)
 
     parser = argparse.ArgumentParser(description='GPTask demonstration or offline data generation')
-    parser.add_argument('--dim_x', type=int, default=1, help='Input dimension')
-    parser.add_argument('--embedding_type', type=str, default='mix', help='Embedding type: data, theta, or mix')
+    parser.add_argument('--dim_x', type=int, default=3, help='Input dimension')
+    parser.add_argument('--embedding_type', type=str, default='data', help='Embedding type: data, theta, or mix')
     args = parser.parse_args()
 
     # Create the GP task
@@ -470,49 +570,11 @@ if __name__ == "__main__":
 
     plt.figure(figsize=(15, 10))
 
-    matplotlib.rcParams.update({
-        'font.family': 'times',
-        'font.size': 14.0,
-        'lines.linewidth': 2,
-        'lines.antialiased': True,
-        'axes.facecolor': 'fdfdfd',
-        'axes.edgecolor': '777777',
-        'axes.linewidth': 1,
-        'axes.titlesize': 'medium',
-        'axes.labelsize': 'medium',
-        'axes.axisbelow': True,
-        'xtick.major.size': 0,  # major tick size in points
-        'xtick.minor.size': 0,  # minor tick size in points
-        'xtick.major.pad': 6,  # distance to major tick label in points
-        'xtick.minor.pad': 6,  # distance to the minor tick label in points
-        'xtick.color': '333333',  # color of the tick labels
-        'xtick.labelsize': 'medium',  # fontsize of the tick labels
-        'xtick.direction': 'in',  # direction: in or out
-        'ytick.major.size': 0,  # major tick size in points
-        'ytick.minor.size': 0,  # minor tick size in points
-        'ytick.major.pad': 6,  # distance to major tick label in points
-        'ytick.minor.pad': 6,  # distance to the minor tick label in points
-        'ytick.color': '333333',  # color of the tick labels
-        'ytick.labelsize': 'medium',  # fontsize of the tick labels
-        'ytick.direction': 'in',  # direction: in or out
-        'axes.grid': False,
-        'grid.alpha': 0.3,
-        'grid.linewidth': 1,
-        'legend.fancybox': True,
-        'legend.fontsize': 'Small',
-        'figure.figsize': (2.5, 2.5),
-        'figure.facecolor': '1.0',
-        'figure.edgecolor': '0.5',
-        'hatch.linewidth': 0.1,
-        'text.usetex': True
-    })
-
     # Only visualize 1D GPs
     if args.dim_x == 1:
         for i in range(20):
             # Create subplot
             plt.subplot(5, 4, i + 1)
-
 
             # Plot the sampled points
             # plt.scatter(batch.context_x[i], batch.context_y[i], c='blue', label='Context' if i == 0 else "", s=10)

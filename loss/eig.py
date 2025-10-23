@@ -2,7 +2,7 @@ import math
 import torch
 import torch.nn as nn
 import torch.distributions as dist
-    
+
 
 class EIGBounds(nn.Module):
     def __init__(self, L: int, T: int, log_prob, reduction=None) -> None:
@@ -35,27 +35,27 @@ class EIGBounds(nn.Module):
 
         # align dimensions for broadcasting
         if len(thetas.shape) == 3:
-            thetas = thetas.unsqueeze(2).expand(-1, -1, T, -1)                   # [L, B, T, D]
+            thetas = thetas.unsqueeze(2).expand(-1, -1, T, -1)  # [L, B, T, D]
         else:
-            thetas = thetas.unsqueeze(2).expand(-1, -1, T, -1, -1)               # [L, B, T, K, D]
-        xi_designs = xi_designs.unsqueeze(0)#.expand(L, -1, -1, -1)              # [1, B, T, D]
-        y_outcomes = y_outcomes.unsqueeze(0)#.expand(L, -1, -1, -1)              # [1, B, T, 1]
+            thetas = thetas.unsqueeze(2).expand(-1, -1, T, -1, -1)  # [L, B, T, K, D]
+        xi_designs = xi_designs.unsqueeze(0)  # .expand(L, -1, -1, -1)              # [1, B, T, D]
+        y_outcomes = y_outcomes.unsqueeze(0)  # .expand(L, -1, -1, -1)              # [1, B, T, 1]
 
-        log_probs = self.log_prob(y_outcomes, xi_designs, thetas)              # [L, B, T, 1]
+        log_probs = self.log_prob(y_outcomes, xi_designs, thetas)  # [L, B, T, 1]
 
         # compute the sequential joint log likelihood
-        log_probs = log_probs.sum(dim=(-2, -1))                                       # [L, B]
+        log_probs = log_probs.sum(dim=(-2, -1))  # [L, B]
         return log_probs
 
     def forward(self, y_outcomes, xi_designs, thetas):
         # raise NotImplementedError
         return self.compute_seq_logprobs(y_outcomes, xi_designs, thetas)
-    
+
 
 class PCELoss(EIGBounds):
     def __init__(self, L: int, T: int, log_prob, reduction='mean') -> None:
         r""" sPCE loss (negative value of sPCE bound with the constant term removed)
-            \mathbb{E}_{p ( \theta_{0}, h_{T} | \pi) p ( \theta_{1:L} )} 
+            \mathbb{E}_{p ( \theta_{0}, h_{T} | \pi) p ( \theta_{1:L} )}
             [ log { \sum_{\ell=0}^{L} p ( h_{T} | \theta_{\ell}, \pi)} - log {p ( h_{T} | \theta_{0}, \pi)}]
 
         Args:
@@ -77,14 +77,15 @@ class PCELoss(EIGBounds):
             sPCE loss
         """
         # compute the sequential joint log likelihood
-        log_probs = self.compute_seq_logprobs(y_outcomes, xi_designs, thetas)   # [L, B]
+        log_probs = self.compute_seq_logprobs(y_outcomes, xi_designs, thetas)  # [L, B]
         # inner expectation
-        loss = log_probs.logsumexp(0) - log_probs[0]                            # [B]
+        loss = log_probs.logsumexp(0) - log_probs[0]  # [B]
         # outer expectation
         if self.reduction == "mean":
             loss = torch.mean(loss)
         return loss
-    
+
+
 class PCELossScoreGradient(PCELoss):
     def __init__(self, L: int, T: int, log_prob, reduction='mean') -> None:
         super(PCELossScoreGradient, self).__init__(L, T, log_prob, reduction)
@@ -101,25 +102,25 @@ class PCELossScoreGradient(PCELoss):
         """
 
         # compute the sequential joint log likelihood
-        log_probs = self.compute_seq_logprobs(y_outcomes, xi_designs, thetas)   # [L, B]
+        log_probs = self.compute_seq_logprobs(y_outcomes, xi_designs, thetas)  # [L, B]
 
         log_prob_primary = log_probs[0]
         log_probs = log_probs.logsumexp(0)
         with torch.no_grad():
             g_no_grad = log_prob_primary - log_probs
 
-        loss = - (g_no_grad * log_prob_primary - log_probs) # [B]
-        
+        loss = - (g_no_grad * log_prob_primary - log_probs)  # [B]
+
         if self.reduction == "mean":
             loss = torch.mean(loss)
 
         return loss
-    
+
 
 class NMCLoss(EIGBounds):
     def __init__(self, L: int, T: int, log_prob, reduction='mean') -> None:
         r""" sNMC loss (negative value of sNMC bound with the constant term removed)
-            \mathbb{E}_{p ( \theta_{0}, h_{T} | \pi) p ( \theta_{1:L} )} 
+            \mathbb{E}_{p ( \theta_{0}, h_{T} | \pi) p ( \theta_{1:L} )}
             [ log { \sum_{\ell=1}^{L} p ( h_{T} | \theta_{\ell}, \pi)} - log {p ( h_{T} | \theta_{0}, \pi)}]
 
         Args:
@@ -141,14 +142,14 @@ class NMCLoss(EIGBounds):
             sNMC loss
         """
         # compute the sequential joint log likelihood
-        log_probs = self.compute_seq_logprobs(y_outcomes, xi_designs, thetas)   # [L, B]
+        log_probs = self.compute_seq_logprobs(y_outcomes, xi_designs, thetas)  # [L, B]
         # inner expectation
-        loss = log_probs[1:].logsumexp(0) - log_probs[0]                        # [B]
+        loss = log_probs[1:].logsumexp(0) - log_probs[0]  # [B]
         # outer expectation
         if self.reduction == "mean":
             loss = torch.mean(loss)
-        return loss 
-    
+        return loss
+
 
 class EIGStepLoss(nn.Module):
     def __init__(self, L: int, M: int, log_prob, reduction=None) -> None:
@@ -164,7 +165,7 @@ class EIGStepLoss(nn.Module):
         self.M = M
         self.log_prob = log_prob
         self.reduction = reduction
-        self.seq_logprobs = torch.zeros((L+ 1, M))
+        self.seq_logprobs = torch.zeros((L + 1, M))
 
     def reset(self):
         """ Reset the sequential log likelihood """
@@ -182,13 +183,13 @@ class EIGStepLoss(nn.Module):
             log_probs [L, M]
         """
 
-        xi_designs = xi_designs.unsqueeze(0)              # [1, B, D_x]
-        y_outcomes = y_outcomes.unsqueeze(0)              # [1, B, D_y]
+        xi_designs = xi_designs.unsqueeze(0)  # [1, B, D_x]
+        y_outcomes = y_outcomes.unsqueeze(0)  # [1, B, D_y]
 
-        log_probs = self.log_prob(y_outcomes, xi_designs, thetas).squeeze(-1)              # [L, B]
+        log_probs = self.log_prob(y_outcomes, xi_designs, thetas).squeeze(-1)  # [L, B]
 
         # accumulate the sequential joint log likelihood
-        self.seq_logprobs += log_probs      # [L, M]
+        self.seq_logprobs += log_probs  # [L, M]
         return self.seq_logprobs
 
     def forward(self, y_outcomes, xi_designs, thetas):
@@ -196,9 +197,9 @@ class EIGStepLoss(nn.Module):
 
         # Inner expectation
         # lower bound
-        pce_loss = log_probs.logsumexp(0) - log_probs[0]                            # [M]
+        pce_loss = log_probs.logsumexp(0) - log_probs[0]  # [M]
         # upper bound
-        nmc_loss = log_probs[1:].logsumexp(0) - log_probs[0]                            # [M]
+        nmc_loss = log_probs[1:].logsumexp(0) - log_probs[0]  # [M]
 
         # Outer expectation
         if self.reduction == "mean":

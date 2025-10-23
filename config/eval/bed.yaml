@@ -1,0 +1,11 @@
+EIG: True
+# During training
+L: 50000
+M: 2000
+batch_size: 500
+# Final evaluation
+L_final: 10000000
+M_final: 2000
+batch_size_final: 5
+n_query_final: 2000
+T_final: 30

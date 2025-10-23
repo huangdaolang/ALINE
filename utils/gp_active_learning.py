@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import torch
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF, ConstantKernel as C, WhiteKernel
 from typing import Dict, Tuple, List, Callable, Optional, Union
@@ -24,6 +25,35 @@ def uncertainty_sampling(
     """
     _, std = gp.predict(X_pool, return_std=True)
     return std
+
+
+def gp_ucb(
+        gp: GaussianProcessRegressor,
+        X_pool: np.ndarray,
+        beta: float = 1.0,
+        **kwargs
+) -> np.ndarray:
+    """
+    Gaussian Process Upper Confidence Bound (GP-UCB) acquisition function.
+
+    Selects the point that maximizes the upper confidence bound, balancing
+    exploitation (high mean) and exploration (high uncertainty).
+
+    Formula: UCB(x) = mu(x) + beta * std(x)
+
+    Args:
+        gp: Trained Gaussian Process model.
+        X_pool: Pool of candidate points to select from.
+        beta: Controls the exploration-exploitation trade-off. A common
+              value is 1.96 for the 95% confidence interval.
+        **kwargs: (Allows for other parameters to be passed without error).
+
+    Returns:
+        Acquisition function values for each candidate point.
+    """
+    mean, std = gp.predict(X_pool, return_std=True)
+    beta = np.sqrt(0.1)
+    return mean + beta * std
 
 
 def variance_reduction(
@@ -337,6 +367,20 @@ def visualize_active_learning_process_2d(
             ax.scatter(X_selected[i - 1][0], X_selected[i - 1][1], y_selected[i - 1],
                        color='red', marker='o', s=100, edgecolor='black', linewidth=2)
 
+        # Set title and labels
+        # if i < len(X_selected):
+        #     if rmse is not None:
+        #         ax.set_title(
+        #             f'Iteration {i + 1}: RMSE={rmse:.4f}\nx=({X_selected[i][0, 0]:.2f}, {X_selected[i][0, 1]:.2f}), y={y_selected[i][0]:.2f}')
+        #     else:
+        #         ax.set_title(
+        #             f'Iteration {i + 1}: x=({X_selected[i][0, 0]:.2f}, {X_selected[i][0, 1]:.2f}), y={y_selected[i][0]:.2f}')
+        # else:
+        #     if rmse is not None:
+        #         ax.set_title(f'Iteration {i + 1}: RMSE={rmse:.4f}')
+        #     else:
+        #         ax.set_title(f'Iteration {i + 1}')
+
         ax.set_xlabel('x1')
         ax.set_ylabel('x2')
         ax.set_zlabel('y')
@@ -562,7 +606,8 @@ def active_learning_with_gp(
         'variance_reduction': variance_reduction,
         'bald': bald_sampling,
         'random': random_sampling,
-        'epig': epig
+        'epig': epig,
+        'ucb': gp_ucb,
     }
 
     # Get the requested acquisition function

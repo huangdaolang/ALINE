@@ -70,7 +70,6 @@ class CESTask(Task):
 
         # Sample log(u) ~ N(1,3) then transform to u
         log_u = self.log_u_prior.sample(shape)
-        # u = torch.exp(log_u)
 
         # Stack parameters into a single tensor [B, 5]
         theta = torch.cat([
@@ -86,7 +85,7 @@ class CESTask(Task):
         """Sample basket pairs"""
         # Sample uniform baskets across the range [0, design_scale]
         # Each data point consists of two baskets (x, x')
-        baskets1 = torch.rand(batch_size, n_data, self.basket_dim) * self.design_scale # TOCHECK: design scale
+        baskets1 = torch.rand(batch_size, n_data, self.basket_dim) * self.design_scale
         baskets2 = torch.rand(batch_size, n_data, self.basket_dim) * self.design_scale
 
         # Combine both baskets into a single tensor
@@ -95,7 +94,7 @@ class CESTask(Task):
         return data  # [B, N, 6]
 
     def utility(self, x, rho, alpha):
-        """Calculate CES utility for a basket U(x) = (sum_i alpha_i * x_i^rho)^(1/rho)
+        """Calculate CES utility for a basket
 
         Args:
             x: basket of goods [B, basket_dim] or [B, T, basket_dim]
@@ -105,7 +104,6 @@ class CESTask(Task):
         Returns:
             utility value [B, 1] or [B, T, 1]
         """
-        # Calculate CES utility
         x_pow_rho = x ** rho
 
         # Compute weighted sum
@@ -119,7 +117,10 @@ class CESTask(Task):
 
     def normalise_design(self, x):
         """Normalize design if needed"""
-        return x
+        return x # / self.design_scale
+
+    def unnormalise_design(self, x):
+        return x # * self.design_scale
     
     def normalise_outcomes(self, y):
         """Normalize preference ratings if needed"""
@@ -202,6 +203,8 @@ class CESTask(Task):
         basket_dist = torch.norm(basket_diff, dim=-1, p=2, keepdim=True)  # [L, B, T, 1]
         sigma_eta = (1 + basket_dist) * self.noise_scale * u  # [L, B, T, 1]
         
+        # mu_eta = torch.clamp(mu_eta, min=-1e4, max=1e4)
+
         log_prob = CensoredSigmoidNormal(mu_eta, sigma_eta, self.epsilon, 1-self.epsilon).log_prob(y)
 
         return log_prob

@@ -56,6 +56,11 @@ class BenchmarkTask(Task):
                 'domain': (0.0, 20.0),
                 'func': self._higdon
             },
+            'rosenbrock2d': {
+                'dim': 2,
+                'domain': [(-2.0, 2.0), (-2.0, 2.0)],
+                'func': self._rosenbrock
+            },
             'ackley2d': {
                 'dim': 2,
                 'domain': [(-2.0, 2.0), (-2.0, 2.0)],
@@ -65,6 +70,11 @@ class BenchmarkTask(Task):
                 'dim': 2,
                 'domain': [(-2.0, 2.0), (-2.0, 2.0)],
                 'func': self._three_hump_camel
+            },
+            'holder_table': {
+                'dim': 2,
+                'domain': [(-10.0, 10.0), (-10.0, 10.0)],
+                'func': self._holder_table
             },
             'goldstein_price': {
                 'dim': 2,
@@ -141,6 +151,14 @@ class BenchmarkTask(Task):
 
         return result
 
+    def _rosenbrock(self, x):
+        """
+        Rosenbrock function (2D)
+        Domain: [-2, 2] for each variable
+        """
+        x1, x2 = x[..., 0], x[..., 1]
+        return 100 * (x2 - x1 ** 2) ** 2 + (x1 - 1) ** 2
+
     def _ackley(self, x):
         """
         Ackley function (2D)
@@ -165,6 +183,24 @@ class BenchmarkTask(Task):
         term5 = x2 ** 2
 
         return term1 + term2 + term3 + term4 + term5
+
+    def _holder_table(self, x):
+        """
+        Holder Table function (2D), scaled to have output range close to [-2, 2]
+        Original domain: [-10, 10] for each variable
+        Scaled output range: approximately [-2, 2]
+        """
+        x1, x2 = x[..., 0], x[..., 1]
+
+        # Calculate the original Holder Table function
+        term1 = torch.sin(x1) * torch.cos(x2)
+        term2 = torch.exp(torch.abs(1 - torch.sqrt(x1 ** 2 + x2 ** 2) / np.pi))
+        original = -torch.abs(term1 * term2)
+
+        # Scale the output to approximately [-2, 2] range
+        scaled = original / 10
+
+        return scaled
 
     def _goldstein_price(self, x):
         """

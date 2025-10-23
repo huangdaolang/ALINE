@@ -98,6 +98,9 @@ def create_target_mask(mask_type,
                 # Attend to all theta parameters
                 mask[n_target_data:] = True
 
+            # TODO: Third type which attends to both data and theta
+            # TODO: Fourth type which attends to part of the data and part of the theta
+
     return mask
 
 

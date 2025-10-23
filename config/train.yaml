@@ -4,6 +4,7 @@ defaults:
   - embedder: embedder
   - head: head
   - task: gpr_mix
+  - eval: default
 
 seed: 123
 
@@ -20,12 +21,12 @@ optimizer: AdamW
 lr: 1e-3
 
 # Scheduler
-scheduler: CosineAnnealing #WarmRestarts
+scheduler: CosineAnnealing
 scheduler_args: {T_0: 1000, T_mult: 2}
 
 # Loss
 loss: NMLELoss
-gamma: 0.99
+gamma: 1
 alpha: 1  # mixing factor of design loss 
 
 # Training
@@ -46,7 +47,7 @@ file_name: aae_${task.name}.pth
 ##### W&B config #####
 wandb:
   group: ${task.name}
-  project: "aline"
+  project: "amortized-acquisition-engine"
   use_wandb: False
   run_name: ${task.name}-${task.dim_x}D-${now:%Y-%m-%d_%H-%M}
 

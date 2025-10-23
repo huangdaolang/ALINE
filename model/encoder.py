@@ -1,38 +1,7 @@
 import torch
 from torch import nn, Tensor
 from torch.nn import TransformerEncoderLayer
-from typing import Optional, List
-
-
-class ACETransformerEncoderLayer(TransformerEncoderLayer):
-    def _sa_block(
-        self,
-        x: Tensor,
-        attn_mask: Optional[Tensor],
-        key_padding_mask: Optional[Tensor],
-        is_causal: bool = False,
-    ) -> Tensor:
-        # Self-attention between the full sequence and context sequence which is the same as cross-attention
-        # This function rewrites the self-attention block to save computation
-
-        slice_ = attn_mask[0, :]
-        zero_mask = slice_ == 0
-        num_ctx = torch.sum(
-            zero_mask
-        ).item()  # We can calculate the number of context elements from the mask a hack
-
-        # self-attention (multihead) is query, key, value,
-        x = self.self_attn(
-            x,
-            x[:, :num_ctx, :],
-            x[:, :num_ctx, :],
-            attn_mask=None,
-            key_padding_mask=key_padding_mask,
-            need_weights=False,
-            is_causal=is_causal,
-        )[0]
-
-        return self.dropout1(x)
+from typing import Optional
 
 
 class EfficientTransformerEncoderLayer(TransformerEncoderLayer):
@@ -77,6 +46,13 @@ class EfficientTransformerEncoderLayer(TransformerEncoderLayer):
         return self.dropout1(x_out)
 
 class Encoder(nn.Module):
+    """
+    Encoder module that processes batches in three different modes:
+    - 'theta': For predicting latent variables only
+    - 'data': For predicting data only
+    - 'mix': Combination of data and theta prediction
+    
+    """
     def __init__(
             self,
             dim_embedding,
@@ -85,10 +61,18 @@ class Encoder(nn.Module):
             dropout,
             num_layers,
     ):
+        """
+        Initialize the encoder module
+        
+        Args:
+            dim_embedding: Dimension of embedding vectors
+            dim_feedforward: Dimension of feedforward layer
+            n_head: Number of attention heads   
+            dropout: Dropout rate
+            num_layers: Number of layers
+        """
         super().__init__()
-        # encoder_layer = TransformerEncoderLayer(
-        #     dim_embedding, n_head, dim_feedforward, dropout, batch_first=True
-        # )
+        # Create the encoder layer
         encoder_layer = EfficientTransformerEncoderLayer(
             dim_embedding, n_head, dim_feedforward, dropout, batch_first=True
         )
@@ -97,6 +81,15 @@ class Encoder(nn.Module):
         self.device = device
 
     def create_mask(self, batch):
+        """
+        Create a mask for the encoder
+        
+        Args:
+            batch: Batch containing context_x, query_x, and target_all
+
+        Returns:
+            mask: Mask for the encoder
+        """
         # Get base dimensions
         num_context = batch.context_x.shape[1]
         num_query = batch.query_x.shape[1]
@@ -105,9 +98,6 @@ class Encoder(nn.Module):
 
         # Create mask where all positions initially can't attend to any position
         mask = torch.zeros(num_all, num_all, device=self.device).fill_(float("-inf"))
-
-        # Each position can attend to itself
-        # mask.fill_diagonal_(0.0)
 
         query_start = num_context
         query_end = query_start + num_query
@@ -130,12 +120,22 @@ class Encoder(nn.Module):
             # Enable attention from all queries to all selected targets at once
             mask[query_start:query_end, target_positions] = 0.0
         else:
-            # Default behavior: all queries can attend to all targets
-            mask[query_start:query_end, target_start:] = 0.0
+            # Default behavior: all queries don't attend to any target
+            mask[query_start:query_end, target_start:] = float("-inf")
 
         return mask
 
     def forward(self, batch, embeddings):
+        """
+        Forward pass through the encoder
+        
+        Args:
+            batch: Batch containing context_x, query_x, and target_all
+            embeddings: Embeddings for the encoder
+
+        Returns:
+            out: Output of the encoder
+        """
         mask = self.create_mask(batch)
         out = self.encoder(embeddings, mask=mask)
         return out
@@ -221,13 +221,6 @@ class EncoderWithTime(nn.Module):
         mask = self.create_mask(batch)
         out = self.encoder(embeddings, mask=mask)
         return out
-
-
-# Define a dummy batch class for testing
-class DummyBatch:
-    def __init__(self, xc, xt):
-        self.xc = xc
-        self.xt = xt
 
 
 # Test the implementation

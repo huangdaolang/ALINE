@@ -1,7 +1,6 @@
 import torch
 from torch.distributions import Normal
 import numpy as np
-from loss import PCELoss, NMCLoss
 from loss.eig import EIGStepLoss
 from attrdictionary import AttrDict
 
@@ -38,50 +37,6 @@ def get_traces(model, experiment, T=30, batch_size=40, time_token=False):
     y = batch.context_y                                     # [B, T, D_y]
 
     return theta_0, x, y
-
-
-@torch.no_grad()
-def compute_EIG_from_history_v0(experiment, theta_0, x, y, L=int(1e6), batch_size=40, stepwise=False):
-    """ Evaluate the lower and upper bounds of EIG from the history, use once at the end of the trajectory
-
-    Args:
-        theta_0 (torch.Tensor) [B, (K, )D]: initial theta
-        x (torch.Tensor) [B, T, D_x]: history of designs
-        y (torch.Tensor) [B, T, D_y]: history of outcomes
-        T (int): number of proposed designs in a trajectory
-        L (int): number of contrastive samples
-        batch_size (int): mini batch size of outer samples
-    """
-    T = x.shape[1]
-
-    pce_criterion = PCELoss(L, T, experiment.log_likelihood, reduction='none')
-    nmc_criterion = NMCLoss(L, T, experiment.log_likelihood, reduction='none')
-
-    pce_losses = []
-    nmc_losses = []
-
-    thetas = experiment.sample_theta((L, batch_size))
-    thetas = torch.concat([theta_0.unsqueeze(0), thetas], dim=0)          # [L+1, B, (K, )D]
-
-    if stepwise:
-        for t in range(1, T + 1):
-            pce_loss = pce_criterion(y[:, :t], x[:, :t], thetas)  # [B]
-            pce_losses.append(pce_loss)
-
-            nmc_loss = nmc_criterion(y[:, :t], x[:, :t], thetas)  # [B]
-            nmc_losses.append(nmc_loss)
-                
-        pce_losses = torch.stack(pce_losses, dim=-1)  # [B, T]
-        nmc_losses = torch.stack(nmc_losses, dim=-1)  # [B, T]
-    else:
-        pce_losses = pce_criterion(y, x, thetas)  # [B]
-        nmc_losses = nmc_criterion(y, x, thetas)  # [B]
-
-    # Calculate bounds
-    pce_losses = torch.log(torch.tensor(L + 1)) - pce_losses  # [B(, T)]
-    nmc_losses = torch.log(torch.tensor(L)) - nmc_losses      # [B(, T)]  
-
-    return pce_losses, nmc_losses
 
 
 @torch.no_grad()
@@ -126,7 +81,7 @@ def compute_EIG_from_history(experiment, theta_0, x, y, L=int(1e6), batch_size=4
 
 
 @torch.no_grad()
-def eval_EIG_from_history(experiment, theta_0, x, y, L=int(1e6), M=2000, batch_size=40, stepwise=False):
+def eval_EIG_from_history(experiment, theta_0, x, y, L=int(1e6), M=2000, batch_size=40, stepwise=False, err_type='se'):
     """ Evaluate the lower and upper bounds of EIG from the history
 
     Args:
@@ -159,22 +114,34 @@ def eval_EIG_from_history(experiment, theta_0, x, y, L=int(1e6), M=2000, batch_s
     # Calculate mean and std
     M = pce.shape[0]
     pce_mean = torch.mean(pce, dim=0)    # [T]
-    pce_std = torch.std(pce, dim=0) / np.sqrt(M)     # [T]
+    pce_err = torch.std(pce, dim=0)     # [T]
     nmc_mean = torch.mean(nmc, dim=0)    # [T]
-    nmc_std = torch.std(nmc, dim=0) / np.sqrt(M)     # [T]
+    nmc_err = torch.std(nmc, dim=0) / np.sqrt(M)     # [T]
+
+    # Error type
+    if err_type == 'se':
+        pce_err = pce_err / np.sqrt(M)
+        nmc_err = nmc_err / np.sqrt(M)
+    elif err_type == 'ci':
+        pce_err = 1.96 * pce_err / np.sqrt(M)
+        nmc_err = 1.96 * nmc_err / np.sqrt(M)
+    elif err_type == 'std':
+        pass
+    else:
+        raise ValueError(f"Unknown err_type: {err_type}")
 
     pce_mean = pce_mean.cpu()
-    pce_std = pce_std.cpu()
+    pce_err = pce_err.cpu()
     nmc_mean = nmc_mean.cpu()
-    nmc_std = nmc_std.cpu()
+    nmc_err = nmc_err.cpu()
 
-    bounds = AttrDict(pce_mean=pce_mean, pce_std=pce_std, nmc_mean=nmc_mean, nmc_std=nmc_std)
+    bounds = AttrDict(pce_mean=pce_mean, pce_err=pce_err, nmc_mean=nmc_mean, nmc_err=nmc_err)
 
     return bounds
 
 @torch.no_grad()
-def eval_boed(model, experiment, T=30, L=int(1e6), M=2000, batch_size=40, time_token=False, stepwise=False):
-    """ Final evaluation the lower and upper bounds of EIG for ALINE
+def eval_boed(model, experiment, T=30, L=int(1e6), M=2000, batch_size=40, time_token=False, stepwise=False, err_type='se'):
+    """ Final evaluation of the EIG bounds for ALINE
 
     Args:
         T (int): number of proposed designs in a trajectory
@@ -204,20 +171,31 @@ def eval_boed(model, experiment, T=30, L=int(1e6), M=2000, batch_size=40, time_t
     # Calculate mean and std
     M = pce.shape[0]
     pce_mean = torch.mean(pce, dim=0)    # [T]
-    pce_std = torch.std(pce, dim=0) / np.sqrt(M)     # [T]
+    pce_err = torch.std(pce, dim=0)     # [T]
     nmc_mean = torch.mean(nmc, dim=0)    # [T]
-    nmc_std = torch.std(nmc, dim=0) / np.sqrt(M)     # [T]
+    nmc_err = torch.std(nmc, dim=0)     # [T]
+
+    # Error type
+    if err_type == 'se':
+        pce_err = pce_err / np.sqrt(M)
+        nmc_err = nmc_err / np.sqrt(M)
+    elif err_type == 'ci':
+        pce_err = 1.96 * pce_err / np.sqrt(M)
+        nmc_err = 1.96 * nmc_err / np.sqrt(M)
+    elif err_type == 'std':
+        pass
+    else:
+        raise ValueError(f"Unknown err_type: {err_type}")
+
 
     pce_mean = pce_mean.cpu()
-    pce_std = pce_std.cpu()
+    pce_err = pce_err.cpu()
     nmc_mean = nmc_mean.cpu()
-    nmc_std = nmc_std.cpu()
+    nmc_err = nmc_err.cpu()
 
-    bounds = AttrDict(pce_mean=pce_mean, pce_std=pce_std, nmc_mean=nmc_mean, nmc_std=nmc_std)
+    bounds = AttrDict(pce_mean=pce_mean, pce_err=pce_err, nmc_mean=nmc_mean, nmc_err=nmc_err)
 
     return bounds
-
-
 
 def compute_ll(value: torch.Tensor, means: torch.Tensor, stds: torch.Tensor, weights: torch.Tensor) -> torch.Tensor:
     """

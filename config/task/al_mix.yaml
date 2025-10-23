@@ -1,6 +1,6 @@
 _target_: tasks.gaussian_process.GPTask
 
-name: GP_mix
+name: AL_mix
 
 dim_x: 2
 dim_y: 1

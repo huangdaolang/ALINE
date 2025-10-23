@@ -9,24 +9,24 @@ class HiddenLocation(Task):
     """Simulate Location Finding Experiment"""
 
     def __init__(
-        self,
-        name: str = "Location",
-        dim_x: int = 2,             # dimension of location
-        dim_y: int = 1,             # dimension of outcome
-        embedding_type="theta",     # mode of the experiment
-        n_target_theta: int = 2,  # number of theta, treat each coordinate as one theta
-        n_context_init: int = 1,    # number of initial context points
-        n_query_init: int = 200,    # number of initial query points
-        K: int = 1,                 # number of source points
-        theta_loc=None,             # prior on theta
-        theta_cov=None,             # prior on theta
-        theta_dist="uniform",       # prior distribution type
-        design_scale=None,          # scale of the design space
-        outcome_scale=10,           # scale of the experiment outcomes
-        noise_scale=0.5,
-        base_signal: float = 0.1,   # param of signal
-        max_signal: float = 1e-4,   # param of signal
-        **kwargs,
+            self,
+            name: str = "Location",
+            dim_x: int = 2,  # dimension of location
+            dim_y: int = 1,  # dimension of outcome
+            embedding_type="theta",  # mode of the experiment
+            n_target_theta: int = 2,  # number of theta, treat each coordinate as one theta
+            n_context_init: int = 1,  # number of initial context points
+            n_query_init: int = 200,  # number of initial query points
+            K: int = 1,  # number of source points
+            theta_loc=None,  # prior on theta
+            theta_cov=None,  # prior on theta
+            theta_dist="uniform",  # prior distribution type
+            design_scale=None,  # scale of the design space
+            outcome_scale=10,  # scale of the experiment outcomes
+            noise_scale=0.5,
+            base_signal: float = 0.1,  # param of signal
+            max_signal: float = 1e-4,  # param of signal
+            **kwargs,
 
     ) -> None:
         super(HiddenLocation, self).__init__(dim_x=dim_x, dim_y=dim_y, n_target_theta=n_target_theta, K=K)
@@ -36,7 +36,7 @@ class HiddenLocation(Task):
 
         low = torch.zeros((K, self.dim_x))
         high = torch.ones((K, self.dim_x))
-        
+
         if theta_dist == "normal":
             self.theta_loc = theta_loc if theta_loc is not None else torch.zeros((K, dim_x))
             self.theta_cov = theta_cov if theta_cov is not None else torch.eye(dim_x)
@@ -51,14 +51,14 @@ class HiddenLocation(Task):
             high = torch.ones((K, self.dim_x)) * 4
 
         elif theta_dist == "uniform":
-            self.theta_loc = theta_loc if theta_loc is not None else torch.zeros((K, dim_x))          # low
+            self.theta_loc = theta_loc if theta_loc is not None else torch.zeros((K, dim_x))  # low
             self.theta_cov = theta_cov if theta_cov is not None else torch.ones((K, dim_x))  # scale: high - low
             self.theta_prior = dist.Uniform(
                 self.theta_loc, self.theta_cov
             )
         else:
             raise ValueError(f"Prior distribution type {theta_dist} is not supported!")
-        
+
         # sampler of the data
         self.data_sampler = dist.Uniform(low, high)
 
@@ -71,7 +71,7 @@ class HiddenLocation(Task):
         self.register_buffer("noise_scale", noise_scale)
         self.base_signal = base_signal
         self.max_signal = max_signal
-        
+
         self.n_target_theta = n_target_theta
         self.n_context_init = n_context_init
         self.n_query_init = n_query_init
@@ -87,7 +87,7 @@ class HiddenLocation(Task):
 
         Args:
             batch_size (int, tuple, or list):
-        
+
         """
         if isinstance(batch_size, int):
             shape = [batch_size]  # Convert int to list
@@ -98,13 +98,12 @@ class HiddenLocation(Task):
 
         return theta
 
-
     @torch.no_grad()
     def sample_data(self, batch_size, n_data):
         """ Sample designs """
         # data = self.theta_prior.sample([batch_size, n_data])
         data = self.data_sampler.sample([batch_size, n_data])
-        return data[..., 0, :] # [B, N, K, D] -> [B, N, D]
+        return data[..., 0, :]  # [B, N, K, D] -> [B, N, D]
 
         # return data.reshape(batch_size, n_data, self.dim_x)  # [B, N, 2]
 
@@ -167,7 +166,7 @@ class HiddenLocation(Task):
     @torch.no_grad()
     def sample_batch(self, batch_size, with_query=True):
         """Sample a batch of data"""
-        theta = self.sample_theta(batch_size) # [B, K, D]
+        theta = self.sample_theta(batch_size)  # [B, K, D]
 
         if not with_query:
             self.n_query_init = 1
@@ -176,7 +175,8 @@ class HiddenLocation(Task):
 
         # normalised design
         x = self.sample_data(batch_size, num_samples)
-        y = self.forward(self.unnormalise_design(x), theta.unsqueeze(1).expand(batch_size, num_samples, self.K, self.dim_x))  # [B, T, 1]
+        y = self.forward(self.unnormalise_design(x),
+                         theta.unsqueeze(1).expand(batch_size, num_samples, self.K, self.dim_x))  # [B, T, 1]
 
         # reshape
         theta = theta.reshape(batch_size, self.n_target_theta, 1)  # Reshape to match [B, K*D, 1]
@@ -190,8 +190,7 @@ class HiddenLocation(Task):
         batch.n_target_theta = self.n_target_theta
 
         return batch
-    
-    
+
     def __str__(self) -> str:
         info = self.__dict__.copy()
         del_keys = []

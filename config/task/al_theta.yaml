@@ -1,36 +1,28 @@
-_target_: tasks.location_finding.HiddenLocation
+_target_: tasks.gaussian_process.GPTask
 
-name: Location
+name: AL_theta
 
-dim_x: 2
+dim_x: 1
 dim_y: 1
 
 embedding_type: theta
 mask_type: ["all"]
 n_selected_targets: null  # for partial mode
-
 predefined_masks: null
 predefined_mask_weights: null
 mask_index: null  # no need for theta mode
-
 attend_to: null  # for split mode, we want to only attend to data or theta
 
-n_target_data: 0
-n_target_theta: 2  # (x, y)
-
-n_context_init: 1  # or 0
+n_context_init: 1
 n_query_init: 200
 
-K: 1
+n_target_data: 0
+n_target_theta: 2  # must be dim_x + 1 (lengthscales, variances)
 
-theta_dist: uniform
-design_scale: 1
-outcome_scale: 10
-noise_scale: 0.5
-base_signal: 0.1
-max_signal: 1e-4
+design_scale: 5
+noise_scale: 0.01
 
-
-
+lengthscale_lower: 0.1
+lengthscale_upper: 2.0
 
 

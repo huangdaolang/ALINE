@@ -1,0 +1,34 @@
+_target_: tasks.hpo.HPOTask
+
+name: HPO
+
+# Dimensions (these are default values, will be overridden based on actual dataset)
+# Dataset dimensions: glmnet=5, ranger=6, svm=4, rpart=4, xgboost=6
+dim_x: 9  # default for glmnet, will be updated dynamically
+dim_y: 1  # always 1 for HPO tasks
+
+# HPO-B meta-dataset configuration
+meta_dataset: ranger  # options: glmnet, ranger, svm, rpart, xgboost
+
+# Only data mode is supported for HPO tasks
+embedding_type: data
+mask_type: ["all"]
+n_selected_targets: null  # later for partial mode
+predefined_masks: null
+predefined_mask_weights: null
+mask_index: null  # no need for data mode
+attend_to: null  # for split mode, we want to only attend to data or theta
+
+# Context and query configuration
+n_context_init: 5
+n_query_init: 100
+min_n_context: 5
+max_n_context: 10
+
+# Target data configuration
+n_target_data: 100
+n_target_theta: 0  # HPO tasks don't have theta parameters
+
+# Data processing
+normalize_y: false
+data_path: null  # will use default path

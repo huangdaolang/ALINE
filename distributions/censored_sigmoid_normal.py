@@ -68,14 +68,6 @@ class CensoredSigmoidNormal(Distribution):
         asymptotic_upper = self.base_dist.log_prob(upper_lim) - (crit + z_upper.abs()).log()
         asymptotic_lower = self.base_dist.log_prob(lower_lim) - (crit + z_lower.abs()).log()
 
-        if is_bad(asymptotic_upper[mask_upper]):
-            raise ArithmeticError("NaN in asymptotic upper")
-        if is_bad(asymptotic_lower[mask_lower]):
-            raise ArithmeticError("NaN in asymptotic lower")
-
-        upper_cdf[mask_upper] = 1.
-        lower_cdf[mask_lower] = 1.
-        
         upper_logcdf = upper_cdf.clone().log()
         lower_logcdf = lower_cdf.clone().log()
 

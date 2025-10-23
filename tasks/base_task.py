@@ -54,6 +54,10 @@ class Task(nn.Module):
             theta: Sampled theta values [size, dim_theta]
         """
         raise NotImplementedError("Child classes must implement sample_theta")
+        
+    def to_design_space(self, xi):
+        """Convert from normalized to real design space."""
+        return xi * self.design_scale
     
     def normalise_design(self, x):
         """Convert from real to normalized design space."""
@@ -79,6 +83,7 @@ class Task(nn.Module):
         Returns:
             observations: [B, 1]
         """
+        xi = self.to_design_space(xi)  # [B, D]
         raise NotImplementedError("Child classes must implement forward")
     
     def log_likelihood(self, y, xi, theta):
@@ -96,7 +101,8 @@ class Task(nn.Module):
         raise NotImplementedError("Child classes must implement log_likelihood")
     
     def update_batch_query(self, query, idx):
-        """ Update the batch of query points
+        """
+        Update the batch of query points
 
         Args:
             query: Current query points [B, N, D]

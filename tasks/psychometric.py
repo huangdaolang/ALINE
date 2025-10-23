@@ -20,6 +20,19 @@ class PsychometricTask(Task):
             design_scale: int = 5,  # scale of the design space
             **kwargs
     ) -> None:
+        """
+        Initialize the PsychometricTask
+
+        Args:
+            name: Name of the task
+            dim_x: Dimension of stimulus intensity
+            dim_y: Dimension of outcome (binary)
+            embedding_type: Mode of the experiment
+            n_target_theta: Number of parameters: [alpha, beta, gamma, lambda]
+            n_context_init: Number of initial context points
+            n_query_init: Number of initial query points
+            design_scale: Scale of the design space
+        """
         super(PsychometricTask, self).__init__(dim_x=dim_x, dim_y=dim_y, n_target_theta=n_target_theta)
 
         self.dim_x = dim_x
@@ -55,7 +68,14 @@ class PsychometricTask(Task):
 
     @torch.no_grad()
     def sample_theta(self, batch_size):
-        """Sample parameters from the prior"""
+        """Sample parameters from the prior
+
+        Args:
+            batch_size: Number of samples to draw
+
+        Returns:
+            theta: Parameters [B, 4, 1]
+        """
         # Sample all parameters
         alpha = self.alpha_prior.sample([batch_size])
         beta = self.beta_prior.sample([batch_size])
@@ -69,7 +89,15 @@ class PsychometricTask(Task):
 
     @torch.no_grad()
     def sample_data(self, batch_size, n_data):
-        """Sample stimulus intensities"""
+        """Sample stimulus intensities
+
+        Args:
+            batch_size: Number of samples to draw
+            n_data: Number of data points to sample
+
+        Returns:
+            data: Stimulus intensities [B, N, 1]
+        """
         # For adaptive methods, this would be more complex
         # Here we simply sample uniform stimuli across the range
         data = torch.rand(batch_size, n_data, self.dim_x) * 2 * self.design_scale - self.design_scale
@@ -106,11 +134,25 @@ class PsychometricTask(Task):
         return p
 
     def to_design_space(self, xi):
-        """Convert normalized design to actual stimulus intensity"""
+        """Convert normalized design to actual stimulus intensity
+
+        Args:
+            xi: Normalized stimulus intensity [B, 1]
+
+        Returns:
+            xi: Stimulus intensity [B, 1]
+        """
         return xi
 
     def normalise_outcomes(self, y):
-        """Normalize binary outcomes if needed"""
+        """Normalize binary outcomes if needed
+
+        Args:
+            y: Binary outcomes [B, 1]
+
+        Returns:
+            y: Normalized binary outcomes [B, 1]
+        """
         return y
 
     def forward(self, xi, theta):
@@ -153,7 +195,14 @@ class PsychometricTask(Task):
         return log_prob
 
     def sample_batch(self, batch_size):
-        """Sample a batch of data"""
+        """Sample a batch of data
+
+        Args:
+            batch_size: Number of samples to draw
+
+        Returns:
+            batch: Batch of data
+        """
         theta = self.sample_theta(batch_size)
         x = self.sample_data(batch_size, self.n_context_init + self.n_query_init)
         y = torch.empty(batch_size, self.n_context_init + self.n_query_init, self.dim_y)

@@ -5,7 +5,8 @@ wandb
 hydra-core
 pandas
 attrdictionary
+gradnorm-pytorch
 matplotlib
 ipykernel
+numpy
 scikit-learn
-scipy
