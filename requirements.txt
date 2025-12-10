@@ -1,5 +1,4 @@
-python
-torch
+torch==2.6.0+cu126
 termcolor
 wandb
 hydra-core
