@@ -120,8 +120,8 @@ class Encoder(nn.Module):
             # Enable attention from all queries to all selected targets at once
             mask[query_start:query_end, target_positions] = 0.0
         else:
-            # Default behavior: all queries don't attend to any target
-            mask[query_start:query_end, target_start:] = float("-inf")
+            # Default behavior: all queries can attend to all targets
+            mask[query_start:query_end, target_start:] = 0.0
 
         return mask
 

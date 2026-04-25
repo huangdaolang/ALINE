@@ -47,7 +47,7 @@ python train_aline.py task=location_finding task.theta_dist=uniform task.n_targe
 
 ### CES
 ```shell
-python train_aline.py task=ces lr=1e-3 T=10 task.n_query_init=100 max_epoch=200000 burning_epoch=20000 eval=bed eval.batch_size=500 eval.T_final=20 eval.L_final=10000000 eval.batch_size_final=20 eval.n_query_final=2000 eval.T_final=15
+python train_aline.py task=ces lr=1e-3 T=10 task.n_query_init=200 max_epoch=200000 burning_epoch=20000 eval=bed eval.batch_size=500 eval.L_final=10000000 eval.batch_size_final=20 eval.n_query_final=2000 eval.T_final=15
 ```
 
 ### Psychometric model
